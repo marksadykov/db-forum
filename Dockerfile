@@ -7,8 +7,8 @@ RUN go get -t "github.com/fasthttp/router"
 RUN go get -t "github.com/jackc/pgx"
 #
 RUN go get -t "github.com/jackc/pgx/pgxpool"
-#
-RUN go get -t "github.com/jackc/tern/migrate"
+##
+#RUN go get -t "github.com/jackc/tern/migrate"
 
 RUN go get -t "github.com/labstack/gommon/log"
 

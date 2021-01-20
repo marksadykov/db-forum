@@ -1831,39 +1831,28 @@ func deleteService(p *pgxpool.Pool) (int, []byte) {
 	}
 	defer conn.Release()
 
-	conn.QueryRow(context.Background(), "TRUNCATE public.forum CASCADE")
-	conn, err = p.Acquire(context.Background())
-	if err != nil {
-		log.Errorf("Unable to acquire a database connection: %v\n", err)
-		return 500, response
-	}
-	defer conn.Release()
 
-	conn.QueryRow(context.Background(), "TRUNCATE public.post CASCADE")
-	conn, err = p.Acquire(context.Background())
-	if err != nil {
-		log.Errorf("Unable to acquire a database connection: %v\n", err)
-		return 500, response
-	}
-	defer conn.Release()
+	//row, err = conn.Query(context.Background(),
+	//	"INSERT INTO public.vote (voice, nickname, thread_id) VALUES ($1, $2, $3) RETURNING id",
+	//	vote.Voice, vote.Nickname, thread.Id)
+	//row.Close()
 
-	conn.QueryRow(context.Background(), "TRUNCATE public.thread CASCADE")
-	conn, err = p.Acquire(context.Background())
-	if err != nil {
-		log.Errorf("Unable to acquire a database connection: %v\n", err)
-		return 500, response
-	}
-	defer conn.Release()
+	var row pgx.Rows
 
-	conn.QueryRow(context.Background(), "TRUNCATE public.users CASCADE")
-	conn, err = p.Acquire(context.Background())
-	if err != nil {
-		log.Errorf("Unable to acquire a database connection: %v\n", err)
-		return 500, response
-	}
-	defer conn.Release()
+	row, err = conn.Query(context.Background(), "TRUNCATE public.vote CASCADE")
+	row.Close()
 
-	conn.QueryRow(context.Background(), "TRUNCATE public.vote CASCADE")
+	row, err = conn.Query(context.Background(), "TRUNCATE public.post CASCADE")
+	row.Close()
+
+	row, err = conn.Query(context.Background(), "TRUNCATE public.thread CASCADE")
+	row.Close()
+
+	row, err = conn.Query(context.Background(), "TRUNCATE public.forum CASCADE")
+	row.Close()
+
+	row, err = conn.Query(context.Background(), "TRUNCATE public.users CASCADE")
+	row.Close()
 
 	response, _ = json.Marshal("Очистка базы успешно завершена")
 	return 200, response
@@ -1884,7 +1873,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to acquire a database connection: %v\n", err)
 	}
-	//migrateDatabase(conn.Conn())
 	conn.Release()
 
 	//config requests
