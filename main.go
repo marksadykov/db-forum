@@ -19,7 +19,8 @@ import (
 )
 
 //var address = "127.0.0.1:3001"
-var address = "0.0.0.0:5000"
+//var address = "0.0.0.0:5000"
+var address = ":5000"
 
 //models
 type (
