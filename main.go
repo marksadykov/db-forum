@@ -1227,9 +1227,6 @@ func addVoteThread(p *pgxpool.Pool, slug string, vote Vote) (int, []byte) {
 
 	response := []byte(`{"Error":"Unable to acquire a database connection"}`)
 
-	//tx, _ := p.Begin(context.Background())
-	//defer tx.Rollback(context.Background())
-
 	conn, err := p.Acquire(context.Background())
 	if err != nil {
 		log.Errorf("Unable to acquire a database connection: %v\n", err)
@@ -1271,7 +1268,8 @@ func addVoteThread(p *pgxpool.Pool, slug string, vote Vote) (int, []byte) {
 	thread.Slug = fmt.Sprintf("%v", threadSlug)
 
 	var currentVote CurrentVote
-	err = conn.QueryRow(context.Background(), "SELECT id, voice FROM public.vote WHERE thread_id = $1 AND lower(nickname) = $2", &thread.Id, strings.ToLower(vote.Nickname)).Scan(&currentVote.Id, &currentVote.Voice)
+	//err = conn.QueryRow(context.Background(), "SELECT id, voice FROM public.vote WHERE thread_id = $1 AND lower(nickname) = $2", &thread.Id, strings.ToLower(vote.Nickname)).Scan(&currentVote.Id, &currentVote.Voice)
+	err = conn.QueryRow(context.Background(), "SELECT voice FROM public.vote WHERE thread_id = $1 AND lower(nickname) = $2", &thread.Id, strings.ToLower(vote.Nickname)).Scan(&currentVote.Voice)
 
 	var row pgx.Rows
 	if err != nil {
@@ -1283,7 +1281,9 @@ func addVoteThread(p *pgxpool.Pool, slug string, vote Vote) (int, []byte) {
 	} else {
 		thread.Votes = thread.Votes - currentVote.Voice
 		thread.Votes = thread.Votes + vote.Voice
-		row, err =  conn.Query(context.Background(), "UPDATE public.vote SET voice = $2 WHERE id = $1", currentVote.Id, vote.Voice)
+		//row, err =  conn.Query(context.Background(), "UPDATE public.vote SET voice = $2 WHERE id = $1", currentVote.Id, vote.Voice)
+		row, err =  conn.Query(context.Background(), "UPDATE public.vote SET voice = $3 WHERE thread_id = $1 AND lower(nickname) = $2", &thread.Id, strings.ToLower(vote.Nickname), vote.Voice)
+
 		row.Close()
 	}
 	//thread.Created = thread.Created.Add(-3 * time.Hour)
@@ -1796,7 +1796,7 @@ func addPostThread(p *pgxpool.Pool, slugOrId string, posts Posts) (int, []byte) 
 		err = row.Scan(&posts[i].Id)
 	}
 
-	conn.QueryRow(context.Background(), "UPDATE public.forum SET posts = posts + $2 WHERE slug = $1", thread.Forum, len(posts))
+	conn.QueryRow(context.Background(), "UPDATE public.forum SET posts = posts + $2 WHERE lower(slug) = $1", strings.ToLower(thread.Forum), len(posts))
 
 	response, _ = json.Marshal(posts)
 	return 201, response
