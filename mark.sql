@@ -40,7 +40,7 @@ create table thread
 create table post
 (
     id         bigserial primary key,
-    created    timestamp,
+    created    timestamp WITH TIME ZONE,
     forum      varchar(80),
     isEdited   boolean,
     message    varchar(5000),
