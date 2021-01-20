@@ -288,7 +288,9 @@ func showFullParentTree(tree Posts) (Posts){
 		postsNodes.Children = append(postsNodes.Children, tree[i])
 		output = showTree(postsNodes)
 	}
-	output = output[1:]
+	if len(output) > 0 {
+		output = output[1:]
+	}
 	return output
 }
 
@@ -952,18 +954,21 @@ func getThreadDetails(p *pgxpool.Pool, slug string) (int, []byte) {
 	var thread Thread
 	var row interface{}
 
+	var slugInter interface{}
 	if flag {
-		row = conn.QueryRow(context.Background(), "SELECT users_nickname, created, id, message, title, votes, slug, forum FROM public.thread WHERE lower(slug) = $1", strings.ToLower(slug)).Scan(&thread.Author, &thread.Created, &thread.Id, &thread.Message, &thread.Title, &thread.Votes, &thread.Slug, &thread.Forum)
+		row = conn.QueryRow(context.Background(), "SELECT users_nickname, created, id, message, title, votes, slug, forum FROM public.thread WHERE lower(slug) = $1", strings.ToLower(slug)).Scan(&thread.Author, &thread.Created, &thread.Id, &thread.Message, &thread.Title, &thread.Votes, &slugInter, &thread.Forum)
 	} else {
-		row = conn.QueryRow(context.Background(), "SELECT users_nickname, created, id, message, title, votes, slug, forum  FROM public.thread WHERE id = $1", selector).Scan(&thread.Author, &thread.Created, &thread.Id, &thread.Message, &thread.Title, &thread.Votes, &thread.Slug, &thread.Forum)
+		row = conn.QueryRow(context.Background(), "SELECT users_nickname, created, id, message, title, votes, slug, forum FROM public.thread WHERE id = $1", selector).Scan(&thread.Author, &thread.Created, &thread.Id, &thread.Message, &thread.Title, &thread.Votes, &slugInter, &thread.Forum)
 	}
 
 	if row != nil {
 		//log.Errorf("Unable to acquire a database connection: %v\n", err)
-		error := Error{"Can't find user with id #\n"}
+		error := Error{"Can't find thread" + thread.Author + thread.Message + thread.Title + fmt.Sprintf("%v", slugInter) + thread.Forum}
 		response, _ = json.Marshal(error)
 		return 404, response
 	}
+
+	thread.Slug = fmt.Sprintf("%v", slugInter)
 
 	//thread.Created = thread.Created.Add(-3 * time.Hour)
 
@@ -1232,6 +1237,15 @@ func addVoteThread(p *pgxpool.Pool, slug string, vote Vote) (int, []byte) {
 	}
 	defer conn.Release()
 
+	var userId uint64
+	err = conn.QueryRow(context.Background(), "SELECT id FROM public.users WHERE lower(nickname) = $1", strings.ToLower(vote.Nickname)).Scan(&userId)
+	if err != nil {
+		//log.Errorf("Unable to acquire a database connection: %v\n", err)
+		error := Error{"Can't find user by nickname: " + vote.Nickname}
+		response, _ = json.Marshal(error)
+		return 404, response
+	}
+
 	selector, err := strconv.Atoi(slug)
 	var flag bool
 
@@ -1255,15 +1269,6 @@ func addVoteThread(p *pgxpool.Pool, slug string, vote Vote) (int, []byte) {
 		return 404, response
 	}
 	thread.Slug = fmt.Sprintf("%v", threadSlug)
-
-	var userId uint64
-	err = conn.QueryRow(context.Background(), "SELECT id FROM public.users WHERE lower(nickname) = $1", strings.ToLower(vote.Nickname)).Scan(&userId)
-	if err != nil {
-		//log.Errorf("Unable to acquire a database connection: %v\n", err)
-		error := Error{"Can't find user by nickname: " + vote.Nickname}
-		response, _ = json.Marshal(error)
-		return 404, response
-	}
 
 	var currentVote CurrentVote
 	err = conn.QueryRow(context.Background(), "SELECT id, voice FROM public.vote WHERE thread_id = $1 AND lower(nickname) = $2", &thread.Id, strings.ToLower(vote.Nickname)).Scan(&currentVote.Id, &currentVote.Voice)
@@ -1532,22 +1537,23 @@ func getPostDetails(p *pgxpool.Pool, id string, related string) (int, []byte) {
 	user.Nickname = post.Author
 
 	var thread Thread
-	var forumId uint32
-	if threadRoute || forumRoute {
-		err = conn.QueryRow(context.Background(), "SELECT id, title, users_nickname, message, votes, created, forum_id, slug, forum  FROM public.thread WHERE id = $1", post.Thread).Scan(&thread.Id, &thread.Title, &thread.Author, &thread.Message, &thread.Votes, &thread.Created, &forumId, &thread.Slug, &thread.Forum)
+	if threadRoute {
+		var slugInter interface{}
+		err = conn.QueryRow(context.Background(), "SELECT id, title, users_nickname, message, votes, created, slug, forum  FROM public.thread WHERE id = $1", post.Thread).Scan(&thread.Id, &thread.Title, &thread.Author, &thread.Message, &thread.Votes, &thread.Created, &slugInter, &thread.Forum)
 		if err != nil {
 			//log.Errorf("Unable to acquire a database connection: %v\n", err)
-			error := Error{"Can't find user with id #\n"}
+			error := Error{"Can't find thread" + thread.Author + thread.Message + thread.Title + fmt.Sprintf("%v", slugInter) + thread.Forum}
 			response, _ = json.Marshal(error)
 			return 404, response
 		}
 		//thread.Created = thread.Created.Add(-3 * time.Hour)
+		thread.Slug = fmt.Sprintf("%v", slugInter)
 	}
 
 	var forum ForumDetails
 	if forumRoute {
 		var userId uint64
-		err = conn.QueryRow(context.Background(), "SELECT title, slug, posts, threads, user_id FROM public.forum WHERE id = $1", forumId).Scan(&forum.Title, &forum.Slug, &forum.Posts, &forum.Threads, &userId)
+		err = conn.QueryRow(context.Background(), "SELECT title, slug, posts, threads, user_id FROM public.forum WHERE lower(slug) = $1", strings.ToLower(post.Forum)).Scan(&forum.Title, &forum.Slug, &forum.Posts, &forum.Threads, &userId)
 		if err != nil {
 			//log.Errorf("Unable to acquire a database connection: %v\n", err)
 			error := Error{"Can't find user with id #\n"}
