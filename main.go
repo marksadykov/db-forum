@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/fasthttp/router"
 	"github.com/jackc/pgx"
+	"github.com/jackc/pgx/pgxpool"
 	"github.com/labstack/gommon/log"
 	"github.com/valyala/fasthttp"
 	"os"
@@ -13,9 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/jackc/pgx/pgxpool"
-	"github.com/jackc/tern/migrate"
 )
 
 //var address = "127.0.0.1:3001"
@@ -59,27 +57,27 @@ type (
 		Children Posts `json:"-"`
 	}
 
-	PostForDetails struct {
-		Author string `json:"author"`
-		Created string `json:"created"`
-		Forum string `json:"forum"`
-		Id uint64 `json:"id"`
-		IsEdited bool `json:"isEdited"`
-		Message string `json:"message"`
-		Parent uint64 `json:"parent"`
-		Thread uint32 `json:"thread"`
-	}
-
-	PostForDetailsPost struct {
-		Author string `json:"author"`
-		Created string `json:"created"`
-		Forum string `json:"forum"`
-		Id uint64 `json:"id"`
-		IsEdited bool `json:"isEdited"`
-		Message string `json:"message"`
-		Parent uint64 `json:"parent"`
-		Thread uint32 `json:"thread"`
-	}
+	//PostForDetails struct {
+	//	Author string `json:"author"`
+	//	Created string `json:"created"`
+	//	Forum string `json:"forum"`
+	//	Id uint64 `json:"id"`
+	//	IsEdited bool `json:"isEdited"`
+	//	Message string `json:"message"`
+	//	Parent uint64 `json:"parent"`
+	//	Thread uint32 `json:"thread"`
+	//}
+	//
+	//PostForDetailsPost struct {
+	//	Author string `json:"author"`
+	//	Created string `json:"created"`
+	//	Forum string `json:"forum"`
+	//	Id uint64 `json:"id"`
+	//	IsEdited bool `json:"isEdited"`
+	//	Message string `json:"message"`
+	//	Parent uint64 `json:"parent"`
+	//	Thread uint32 `json:"thread"`
+	//}
 
 	PostPost struct {
 		Post Post `json:"post"`
@@ -630,38 +628,6 @@ func (h *RequestHandler) updateUser(ctx *fasthttp.RequestCtx) {
 	ctx.SetBody(response)
 }
 
-
-
-//migrate
-func migrateDatabase(conn *pgx.Conn) {
-	migrator, err := migrate.NewMigrator(context.Background(), conn, "schema_version")
-	if err != nil {
-		log.Fatalf("Unable to create a migrator: %v\n", err)
-	}
-
-	err = migrator.LoadMigrations("scripts")
-	if err != nil {
-		log.Fatalf("Unable to load migrations: %v\n", err)
-	}
-
-	err = migrator.Migrate(context.Background())
-	if err != nil {
-		log.Fatalf("Unable to migrate: %v\n", err)
-	}
-
-	ver, err := migrator.GetCurrentVersion(context.Background())
-	if err != nil {
-		log.Fatalf("Unable to get current schema version: %v\n", err)
-	}
-
-	log.Infof("Migration done. Current schema version: %v\n", ver)
-}
-
-type Record struct {
-	Id    int    `json:"id"`
-	Name  string `json:"name"`
-	Phone string `json:"phone"`
-}
 
 //CRUD
 //CreateForum
