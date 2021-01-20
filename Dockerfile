@@ -48,7 +48,7 @@ RUN /etc/init.d/postgresql start &&\
 #    psql --command "alter user root with password 'root';" &&\
 #    createdb -U root db_forum_docker &&\
     psql --command "create database root owner root;" &&\
-    psql --command "SET TIME ZONE 'Europe/Rome';" &&\
+    psql --command "SET TIME ZONE 'Europe/Moscow';" &&\
 #    PGPASSWORD="root" pg_restore -h localhost -U root -F t -d root /fordump/dumpfile &&\
     PGPASSWORD="root" psql -h localhost -d root -U root -p 5432 -a -q -f /fordump/mark.sql &&\
     /etc/init.d/postgresql stop
