@@ -1926,25 +1926,25 @@ func main() {
 
 	// router
 	router := router.New()
-	router.POST("/forum/create", config.createForum)
-	router.GET("/forum/{slug}/details", config.getForumDetails)
-	router.POST("/forum/{slug}/create", config.createForumThread)
-	router.GET("/forum/{slug}/users", config.getForumUsers)
-	router.GET("/forum/{slug}/threads", config.getForumThreads)
-	router.GET("/post/{id}/details", config.getPostDetails)
-	router.POST("/post/{id}/details", config.updatePost)
+	router.POST("/api/forum/create", config.createForum)
+	router.GET("/api/forum/{slug}/details", config.getForumDetails)
+	router.POST("/api/forum/{slug}/create", config.createForumThread)
+	router.GET("/api/forum/{slug}/users", config.getForumUsers)
+	router.GET("/api/forum/{slug}/threads", config.getForumThreads)
+	router.GET("/api/post/{id}/details", config.getPostDetails)
+	router.POST("/api/post/{id}/details", config.updatePost)
 
-	router.POST("/service/clear", config.deleteService)
-	router.GET("/service/status", config.getService)
-	router.POST("/thread/{slug_or_id}/create", config.addPostThread)
-	router.GET("/thread/{slug_or_id}/details", config.getThreadDetails)
-	router.POST("/thread/{slug_or_id}/details", config.updateThreadDetails)
+	router.POST("/api/service/clear", config.deleteService)
+	router.GET("/api/service/status", config.getService)
+	router.POST("/api/thread/{slug_or_id}/create", config.addPostThread)
+	router.GET("/api/thread/{slug_or_id}/details", config.getThreadDetails)
+	router.POST("/api/thread/{slug_or_id}/details", config.updateThreadDetails)
 
-	router.GET("/thread/{slug_or_id}/posts", config.getPostThread)
-	router.POST("/thread/{slug_or_id}/vote", config.addVoteThread)
-	router.POST("/user/{nickname}/create", config.createUser)
-	router.GET("/user/{nickname}/profile", config.getUser)
-	router.POST("/user/{nickname}/profile", config.updateUser)
+	router.GET("/api/thread/{slug_or_id}/posts", config.getPostThread)
+	router.POST("/api/thread/{slug_or_id}/vote", config.addVoteThread)
+	router.POST("/api/user/{nickname}/create", config.createUser)
+	router.GET("/api/user/{nickname}/profile", config.getUser)
+	router.POST("/api/user/{nickname}/profile", config.updateUser)
 
 
 	server := fasthttp.Server{Handler: router.Handler}
