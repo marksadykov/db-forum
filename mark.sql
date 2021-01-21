@@ -76,6 +76,17 @@ CREATE UNLOGGED TABLE vote
     thread_slug varchar(80)
 );
 
+CREATE UNLOGGED TABLE user_forum
+(
+    id       SERIAL PRIMARY KEY,
+    nickname     varchar(80),
+--     fullname     varchar(80),
+--     email        varchar(80),
+--     about        varchar(500),
+    slug     varchar(80),
+    CONSTRAINT nickname_slug_unique UNIQUE (nickname, slug)
+);
+
 -- for input
 CREATE INDEX users_nickname_lower_index ON users (lower(nickname));
 CREATE INDEX users_email_index ON users (lower(email));
@@ -90,4 +101,5 @@ CREATE INDEX users_id_index ON users (id);
 CREATE INDEX thread_forum_id_index ON thread (forum_id);
 CREATE INDEX post_id_index ON post (id);
 CREATE INDEX forum_id_index ON forum (id);
-CREATE INDEX post_forum_index ON post (lower(forum));
+
+CREATE INDEX user_forum_slug_index ON user_forum (lower(slug));

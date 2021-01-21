@@ -709,7 +709,6 @@ func InsertCreateForumThread(p *pgxpool.Pool, thread Thread) (int, []byte) {
 	}
 	rows.Close()
 	if forumId == 0 {
-		//log.Errorf("Unable to SELECT id FROM forum: %v\n", err)
 		error := Error{"Can't find user with id #\n"}
 		response, _ = json.Marshal(error)
 		return 404, response
@@ -724,7 +723,6 @@ func InsertCreateForumThread(p *pgxpool.Pool, thread Thread) (int, []byte) {
 	}
 	rows.Close()
 	if userId == 0 {
-		//log.Errorf("Unable to SELECT id FROM users: %v\n", err)
 		error := Error{"Can't find user with id #\n"}
 		response, _ = json.Marshal(error)
 		return 404, response
@@ -736,14 +734,12 @@ func InsertCreateForumThread(p *pgxpool.Pool, thread Thread) (int, []byte) {
 		err = rows.Scan(&currentThread.Id, &currentThread.Created, &currentThread.Message, &currentThread.Votes, &forumId, &userId, &currentThread.Slug, &currentThread.Author, &currentThread.Forum, &currentThread.Title)
 	}
 	rows.Close()
-	if (currentThread.Title != "" && currentThread.Slug != "") {
-		//log.Errorf("Unable to INSERT: %v\n", err)
-		//currentThread.Created = currentThread.Created.Add(-3 * time.Hour)
+	if currentThread.Title != "" && currentThread.Slug != "" {
 		response, _ = json.Marshal(currentThread)
 		return 409, response
 	}
 
-	if (thread.Slug == "") {
+	if thread.Slug == "" {
 		rows, err = conn.Query(context.Background(),
 			"INSERT INTO public.thread (forum, created, message, title, votes, forum_id, user_id, users_nickname, users_fullname, users_email, users_about) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
 			thread.Forum, thread.Created, thread.Message, thread.Title, 0, forumId, userId, thread.Author, user.Fullname, user.Email, user.About)
@@ -756,6 +752,11 @@ func InsertCreateForumThread(p *pgxpool.Pool, thread Thread) (int, []byte) {
 	for rows.Next() {
 		err = rows.Scan(&thread.Id)
 	}
+	rows.Close()
+
+	rows, err = conn.Query(context.Background(),
+		"INSERT INTO public.user_forum (nickname, slug) VALUES ($1, $2)",
+		thread.Author, thread.Forum)
 	rows.Close()
 
 	rows, err = conn.Query(context.Background(), "UPDATE public.forum SET threads = threads + 1 WHERE id = $1", forumId)
@@ -934,7 +935,7 @@ func getForumUsers(p *pgxpool.Pool, slug string, limit string, since string, des
 		return 404, response
 	}
 
-	var usersAll Users
+	var users Users
 	var rows pgx.Rows
 	//rows, err = conn.Query(context.Background(), "SELECT users_nickname, users_about, users_email, users_fullname, user_id FROM public.thread WHERE forum_id = $1 UNION SELECT users_nickname, users_about, users_email, users_fullname, user_id FROM post WHERE lower(forum) = $2", forumId, strings.ToLower(slug))
 	//
@@ -945,31 +946,38 @@ func getForumUsers(p *pgxpool.Pool, slug string, limit string, since string, des
 	//}
 	//rows.Close()
 
-	rows, err = conn.Query(context.Background(), "SELECT users_nickname, users_about, users_email, users_fullname, user_id FROM public.thread WHERE forum_id = $1", forumId)
+	//rows, err = conn.Query(context.Background(), "SELECT users_nickname, users_about, users_email, users_fullname, user_id FROM public.thread WHERE forum_id = $1", forumId)
+	//for rows.Next() {
+	//	var user User
+	//	err = rows.Scan(&user.Nickname, &user.About, &user.Email, &user.Fullname, &user.Id)
+	//	usersAll  = append(usersAll, user)
+	//}
+	//rows.Close()
+	//
+	//rows, err = conn.Query(context.Background(), "SELECT users_nickname, users_about, users_email, users_fullname, user_id FROM post WHERE lower(forum) = $1", strings.ToLower(slug))
+	//for rows.Next() {
+	//	var user User
+	//	err = rows.Scan(&user.Nickname, &user.About, &user.Email, &user.Fullname, &user.Id)
+	//	usersAll = append(usersAll, user)
+	//}
+	//rows.Close()
+
+	rows, err = conn.Query(context.Background(), "SELECT users.nickname, users.about, users.email, users.fullname FROM user_forum JOIN users ON users.nickname = user_forum.nickname WHERE lower(slug) = $1", strings.ToLower(slug))
 	for rows.Next() {
 		var user User
-		err = rows.Scan(&user.Nickname, &user.About, &user.Email, &user.Fullname, &user.Id)
-		usersAll  = append(usersAll, user)
+		err = rows.Scan(&user.Nickname, &user.About, &user.Email, &user.Fullname)
+		users = append(users, user)
 	}
 	rows.Close()
 
-	rows, err = conn.Query(context.Background(), "SELECT users_nickname, users_about, users_email, users_fullname, user_id FROM post WHERE lower(forum) = $1", strings.ToLower(slug))
-	for rows.Next() {
-		var user User
-		err = rows.Scan(&user.Nickname, &user.About, &user.Email, &user.Fullname, &user.Id)
-		usersAll = append(usersAll, user)
-	}
-	rows.Close()
-
-
-	var users Users
-	keys := make(map[string]bool)
-	for _, entry := range usersAll {
-		if _, value := keys[entry.Nickname]; !value {
-			keys[entry.Nickname] = true
-			users = append(users, entry)
-		}
-	}
+	//var users Users
+	//keys := make(map[string]bool)
+	//for _, entry := range usersAll {
+	//	if _, value := keys[entry.Nickname]; !value {
+	//		keys[entry.Nickname] = true
+	//		users = append(users, entry)
+	//	}
+	//}
 
 	if descBool {
 		sort.SliceStable(users , func(m, n int) bool {
@@ -1938,15 +1946,24 @@ func addPostThread(p *pgxpool.Pool, slugOrId string, posts Posts) (int, []byte) 
 		posts[i].IsEdited = false
 		posts[i].Created = currentTime
 
-		var row pgx.Row
-		row = conn.QueryRow(context.Background(),
+		var rows pgx.Rows
+		rows, err = conn.Query(context.Background(),
 			"INSERT INTO public.post (forum, thread_id, created, isedited, parent, users_nickname, message, users_email, users_fullname, users_about, user_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
 			posts[i].Forum, posts[i].Thread, posts[i].Created, posts[i].IsEdited, posts[i].Parent, posts[i].Author, posts[i].Message, posts[i].Email, posts[i].Fullname, posts[i].About, posts[i].UserId)
 
-		err = row.Scan(&posts[i].Id)
+		for rows.Next() {
+			rows.Scan(&posts[i].Id)
+		}
+		rows.Close()
+
+		rows, err = conn.Query(context.Background(),
+			"INSERT INTO public.user_forum (nickname, slug) VALUES ($1, $2)",
+			posts[i].Author, thread.Forum)
+		rows.Close()
 	}
 
-	conn.QueryRow(context.Background(), "UPDATE public.forum SET posts = posts + $2 WHERE lower(slug) = $1", strings.ToLower(thread.Forum), len(posts))
+	rows, err = conn.Query(context.Background(), "UPDATE public.forum SET posts = posts + $2 WHERE lower(slug) = $1", strings.ToLower(thread.Forum), len(posts))
+	rows.Close()
 
 	response, _ = json.Marshal(posts)
 	return 201, response
