@@ -1254,44 +1254,132 @@ func addVoteThread(p *pgxpool.Pool, slug string, vote Vote) (int, []byte) {
 
 	var threadSlug interface{}
 	var thread Thread
-	if flag {
-		err = conn.QueryRow(context.Background(), "SELECT id, votes, title, users_nickname, forum, slug, message, created FROM public.thread WHERE lower(slug) = $1", strings.ToLower(slug)).Scan(&thread.Id, &thread.Votes, &thread.Title, &thread.Author, &thread.Forum, &threadSlug, &thread.Message, &thread.Created)
-	} else {
-		err = conn.QueryRow(context.Background(), "SELECT id, votes, title, users_nickname, forum, slug, message, created FROM public.thread WHERE id = $1", selector).Scan(&thread.Id, &thread.Votes, &thread.Title, &thread.Author, &thread.Forum, &threadSlug, &thread.Message, &thread.Created)
-	}
-	if err != nil {
-		//log.Errorf("Unable to acquire a database connection: %v\n", err)
-		error := Error{"Can't find user with id #\n"}
-		response, _ = json.Marshal(error)
-		return 404, response
-	}
-	thread.Slug = fmt.Sprintf("%v", threadSlug)
+	//if flag {
+	//	err = conn.QueryRow(context.Background(), "SELECT id, votes, title, users_nickname, forum, slug, message, created FROM public.thread WHERE lower(slug) = $1", strings.ToLower(slug)).Scan(&thread.Id, &thread.Votes, &thread.Title, &thread.Author, &thread.Forum, &threadSlug, &thread.Message, &thread.Created)
+	//} else {
+	//	err = conn.QueryRow(context.Background(), "SELECT id, votes, title, users_nickname, forum, slug, message, created FROM public.thread WHERE id = $1", selector).Scan(&thread.Id, &thread.Votes, &thread.Title, &thread.Author, &thread.Forum, &threadSlug, &thread.Message, &thread.Created)
+	//}
+	//if err != nil {
+	//	//log.Errorf("Unable to acquire a database connection: %v\n", err)
+	//	error := Error{"Can't find user with id #\n"}
+	//	response, _ = json.Marshal(error)
+	//	return 404, response
+	//}
+	//thread.Slug = fmt.Sprintf("%v", threadSlug)
 
 	var currentVote CurrentVote
 	//err = conn.QueryRow(context.Background(), "SELECT id, voice FROM public.vote WHERE thread_id = $1 AND lower(nickname) = $2", &thread.Id, strings.ToLower(vote.Nickname)).Scan(&currentVote.Id, &currentVote.Voice)
-	err = conn.QueryRow(context.Background(), "SELECT voice FROM public.vote WHERE thread_id = $1 AND lower(nickname) = $2", &thread.Id, strings.ToLower(vote.Nickname)).Scan(&currentVote.Voice)
 
-	var row pgx.Rows
+	var rows pgx.Rows
+
+
 	if err != nil {
-		row, err = conn.Query(context.Background(),
-			"INSERT INTO public.vote (voice, nickname, thread_id) VALUES ($1, $2, $3) RETURNING id",
-			vote.Voice, vote.Nickname, thread.Id)
-		row.Close()
-		thread.Votes = thread.Votes + vote.Voice
+		rows, err = conn.Query(context.Background(), "SELECT voice FROM public.vote WHERE lower(thread_slug) = $1 AND lower(nickname) = $2", strings.ToLower(slug), strings.ToLower(vote.Nickname))
 	} else {
-		thread.Votes = thread.Votes - currentVote.Voice
-		thread.Votes = thread.Votes + vote.Voice
-		//row, err =  conn.Query(context.Background(), "UPDATE public.vote SET voice = $2 WHERE id = $1", currentVote.Id, vote.Voice)
-		row, err =  conn.Query(context.Background(), "UPDATE public.vote SET voice = $3 WHERE thread_id = $1 AND lower(nickname) = $2", &thread.Id, strings.ToLower(vote.Nickname), vote.Voice)
+		rows, err = conn.Query(context.Background(), "SELECT voice FROM public.vote WHERE thread_id = $1 AND lower(nickname) = $2", selector, strings.ToLower(vote.Nickname))
+	}
 
-		row.Close()
+	for rows.Next() {
+		rows.Scan(&currentVote.Voice)
+	}
+	rows.Close()
+
+	if currentVote.Voice == 0 {
+		if vote.Voice == 1 {
+			if flag {
+				rows, err = conn.Query(context.Background(), "UPDATE public.thread SET votes = votes + 1 WHERE lower(slug) = $1 RETURNING id, votes, title, users_nickname, forum, slug, message, created", strings.ToLower(slug))
+			} else {
+				rows, err = conn.Query(context.Background(), "UPDATE public.thread SET votes = votes + 1 WHERE id = $1 RETURNING id, votes, title, users_nickname, forum, slug, message, created", selector)
+			}
+			for rows.Next() {
+				err = rows.Scan(&thread.Id, &thread.Votes, &thread.Title, &thread.Author, &thread.Forum, &threadSlug, &thread.Message, &thread.Created)
+			}
+			rows.Close()
+		}
+		if vote.Voice == -1 {
+			if flag {
+				rows, err = conn.Query(context.Background(), "UPDATE public.thread SET votes = votes - 1 WHERE lower(slug) = $1 RETURNING id, votes, title, users_nickname, forum, slug, message, created", strings.ToLower(slug))
+			} else {
+				rows, err = conn.Query(context.Background(), "UPDATE public.thread SET votes = votes - 1 WHERE id = $1 RETURNING id, votes, title, users_nickname, forum, slug, message, created", selector)
+			}
+			for rows.Next() {
+				err = rows.Scan(&thread.Id, &thread.Votes, &thread.Title, &thread.Author, &thread.Forum, &threadSlug, &thread.Message, &thread.Created)
+			}
+			rows.Close()
+		}
+		if thread.Id == 0 {
+			//log.Errorf("Unable to acquire a database connection: %v\n", err)
+			error := Error{"Can't find user with id #\n"}
+			response, _ = json.Marshal(error)
+			return 404, response
+		}
+		thread.Slug = fmt.Sprintf("%v", threadSlug)
+		rows, err = conn.Query(context.Background(),
+			"INSERT INTO public.vote (voice, nickname, thread_id, thread_slug) VALUES ($1, $2, $3, $4) RETURNING id",
+			vote.Voice, vote.Nickname, thread.Id, thread.Slug)
+		rows.Close()
+		response, _ = json.Marshal(thread)
+		return 200, response
+		//thread.Votes = thread.Votes + vote.Voice
+	} else {
+		if (vote.Voice == 1 && currentVote.Voice == 1) || (vote.Voice == -1 && currentVote.Voice == -1) {
+			if flag {
+				rows, err = conn.Query(context.Background(), "SELECT id, votes, title, users_nickname, forum, slug, message, created FROM public.thread WHERE lower(slug) = $1", strings.ToLower(slug))
+			} else {
+				rows, err = conn.Query(context.Background(), "SELECT id, votes, title, users_nickname, forum, slug, message, created FROM public.thread WHERE id = $1", selector)
+			}
+			for rows.Next() {
+				rows.Scan(&thread.Id, &thread.Votes, &thread.Title, &thread.Author, &thread.Forum, &threadSlug, &thread.Message, &thread.Created)
+			}
+			rows.Close()
+			if thread.Id == 0 {
+				//log.Errorf("Unable to acquire a database connection: %v\n", err)
+				error := Error{"Can't find user with id #\n"}
+				response, _ = json.Marshal(error)
+				return 404, response
+			}
+			thread.Slug = fmt.Sprintf("%v", threadSlug)
+			response, _ = json.Marshal(thread)
+			return 200, response
+		}
+		if vote.Voice == 1 && currentVote.Voice == -1 {
+			if flag {
+				rows, err = conn.Query(context.Background(), "UPDATE public.thread SET votes = votes + 2 WHERE lower(slug) = $1 RETURNING id, votes, title, users_nickname, forum, slug, message, created", strings.ToLower(slug))
+			} else {
+				rows, err = conn.Query(context.Background(), "UPDATE public.thread SET votes = votes + 2 WHERE id = $1 RETURNING id, votes, title, users_nickname, forum, slug, message, created", selector)
+			}
+			for rows.Next() {
+				rows.Scan(&thread.Id, &thread.Votes, &thread.Title, &thread.Author, &thread.Forum, &threadSlug, &thread.Message, &thread.Created)
+			}
+			rows.Close()
+		}
+		if vote.Voice == -1 && currentVote.Voice == 1 {
+			if flag {
+				rows, err = conn.Query(context.Background(), "UPDATE public.thread SET votes = votes - 2 WHERE lower(slug) = $1 RETURNING id, votes, title, users_nickname, forum, slug, message, created", strings.ToLower(slug))
+			} else {
+				rows, err = conn.Query(context.Background(), "UPDATE public.thread SET votes = votes - 2 WHERE id = $1 RETURNING id, votes, title, users_nickname, forum, slug, message, created", selector)
+			}
+			for rows.Next() {
+				rows.Scan(&thread.Id, &thread.Votes, &thread.Title, &thread.Author, &thread.Forum, &threadSlug, &thread.Message, &thread.Created)
+			}
+			rows.Close()
+		}
+		//thread.Votes = thread.Votes - currentVote.Voice
+		//thread.Votes = thread.Votes + vote.Voice
+		//row, err =  conn.Query(context.Background(), "UPDATE public.vote SET voice = $2 WHERE id = $1", currentVote.Id, vote.Voice)
+		thread.Slug = fmt.Sprintf("%v", threadSlug)
+
+		if err != nil {
+			rows, err = conn.Query(context.Background(), "UPDATE public.vote SET voice = $3 WHERE thread_id = $1 AND lower(nickname) = $2", thread.Slug, strings.ToLower(vote.Nickname), vote.Voice)
+		} else {
+			rows, err = conn.Query(context.Background(), "UPDATE public.vote SET voice = $3 WHERE thread_id = $1 AND lower(nickname) = $2", thread.Id, strings.ToLower(vote.Nickname), vote.Voice)
+		}
+		rows.Close()
+		response, _ = json.Marshal(thread)
+		return 200, response
 	}
 	//thread.Created = thread.Created.Add(-3 * time.Hour)
-
-	row, err = conn.Query(context.Background(), "UPDATE public.thread SET votes = $2 WHERE id = $1", thread.Id, thread.Votes)
-
-	response, _ = json.Marshal(thread)
-	return 200, response
+	//row, err = conn.Query(context.Background(), "UPDATE public.thread SET votes = $2 WHERE id = $1", thread.Id, thread.Votes)
 }
 
 //CreateUser

@@ -76,7 +76,8 @@ CREATE UNLOGGED TABLE vote
     id       SERIAL PRIMARY KEY,
     voice    int,
     thread_id int,
-    nickname varchar(80)
+    nickname varchar(80),
+    thread_slug varchar(80)
 );
 
 CREATE INDEX users_nickname_lower_index ON users (lower(nickname));
