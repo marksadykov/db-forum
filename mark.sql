@@ -11,11 +11,11 @@ ALTER SYSTEM SET
 
 CREATE UNLOGGED TABLE users
 (
-    id       SERIAL PRIMARY KEY,
+--     id       SERIAL PRIMARY KEY,
     about    varchar(500),
     email    varchar(200),
     fullname varchar(200),
-    nickname varchar(200)
+    nickname varchar(80) PRIMARY KEY
 );
 
 CREATE UNLOGGED TABLE forum
@@ -25,8 +25,8 @@ CREATE UNLOGGED TABLE forum
     slug     varchar(80),
     threads  int,
     title    varchar(200),
-    nickname varchar(200),
-    user_id int
+    nickname varchar(80)
+--     user_id int
 );
 
 CREATE UNLOGGED TABLE thread
@@ -41,7 +41,7 @@ CREATE UNLOGGED TABLE thread
     forum       varchar(200),
 
     forum_id int,
-    user_id  int,
+--     user_id  int,
 
     users_nickname     varchar(80),
     users_fullname     varchar(80),
@@ -59,12 +59,10 @@ CREATE UNLOGGED TABLE post
     parent     int,
 
     thread_id  int,
-    user_id    int,
-
-    users_nickname     varchar(80),
-    users_fullname     varchar(80),
-    users_email        varchar(80),
-    users_about        varchar(500)
+    users_nickname     varchar(80)
+--     users_fullname     varchar(80),
+--     users_email        varchar(80),
+--     users_about        varchar(500)
 );
 
 CREATE UNLOGGED TABLE vote
@@ -97,7 +95,7 @@ CREATE INDEX vote_nickname ON vote (thread_id, lower(nickname));
 CREATE INDEX post_thread_id_index ON post (thread_id);
 
 -- for output
-CREATE INDEX users_id_index ON users (id);
+-- CREATE INDEX users_id_index ON users (id);
 CREATE INDEX thread_forum_id_index ON thread (forum_id);
 CREATE INDEX post_id_index ON post (id);
 CREATE INDEX forum_id_index ON forum (id);
