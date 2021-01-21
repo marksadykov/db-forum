@@ -679,8 +679,8 @@ func InsertCreateForum(p *pgxpool.Pool, forum Forum) (int, []byte) {
 	}
 
 	conn.QueryRow(context.Background(),
-		"INSERT INTO public.forum (slug, title, user_id, posts, threads) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-		forum.Slug, forum.Title, id, 0, 0)
+		"INSERT INTO public.forum (slug, title, user_id, posts, threads, nickname) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+		forum.Slug, forum.Title, id, 0, 0, forum.User)
 
 	response, _ = json.Marshal(forum)
 
@@ -780,15 +780,14 @@ func getForumDetails(p *pgxpool.Pool, slug string) (int, []byte) {
 
 	var forum ForumDetails
 	var userId uint64
-	err = conn.QueryRow(context.Background(), "SELECT title, user_id, slug, posts, threads FROM public.forum WHERE lower(slug) = $1", strings.ToLower(slug)).Scan(&forum.Title, &userId, &forum.Slug, &forum.Posts, &forum.Threads)
+	err = conn.QueryRow(context.Background(), "SELECT title, user_id, slug, posts, threads, nickname FROM public.forum WHERE lower(slug) = $1", strings.ToLower(slug)).Scan(&forum.Title, &userId, &forum.Slug, &forum.Posts, &forum.Threads, &forum.User)
 	if err != nil {
-		//log.Errorf("Unable to acquire a database connection: %v\n", err)
 		error := Error{"Can't find user with id #\n"}
 		response, _ = json.Marshal(error)
 		return 404, response
 	}
 
-	err = conn.QueryRow(context.Background(), "SELECT nickname FROM public.users WHERE id = $1", userId).Scan(&forum.User)
+	//err = conn.QueryRow(context.Background(), "SELECT nickname FROM public.users WHERE id = $1", userId).Scan(&forum.User)
 
 	response, _ = json.Marshal(forum)
 	return 200, response
@@ -838,21 +837,11 @@ func getForumThreads(p *pgxpool.Pool, slug string, limit string, since string, d
 	}
 
 	var threads Threads
-	//if since != "" {
-	//	if descBool {
-	//		rows, err = conn.Query(context.Background(), "SELECT created, users_nickname, id, message, title, votes, forum, slug FROM public.thread WHERE forum_id = $1 AND created <= $2", forumId, sinceDate)
-	//	} else {
-	//		rows, err = conn.Query(context.Background(), "SELECT created, users_nickname, id, message, title, votes, forum, slug FROM public.thread WHERE forum_id = $1 AND created >= $2", forumId, sinceDate)
-	//	}
-	//} else {
-	//	rows, err = conn.Query(context.Background(), "SELECT created, users_nickname, id, message, title, votes, forum, slug  FROM public.thread WHERE forum_id = $1", forumId)
-	//}
 	rows, err = conn.Query(context.Background(), "SELECT created, users_nickname, id, message, title, votes, forum, slug  FROM public.thread WHERE forum_id = $1", forumId)
 	for rows.Next() {
 		var threadSlug interface{}
 		var thread Thread
 		if err = rows.Scan(&thread.Created, &thread.Author, &thread.Id, &thread.Message, &thread.Title, &thread.Votes, &thread.Forum, &threadSlug); err == nil {
-			//thread.Created = thread.Created.Add(-3 * time.Hour)
 			slugInterStr := fmt.Sprintf("%v", threadSlug)
 			if slugInterStr == "<nil>" {
 				slugInterStr = ""
@@ -884,13 +873,7 @@ func getForumThreads(p *pgxpool.Pool, slug string, limit string, since string, d
 				myIndex = i
 				break
 			}
-			//if threads[i].Created.After(sinceDate) && myIndex == -1 {
-			//	myIndex = i
-			//}
 		}
-		//if myIndex > 1 && threads[myIndex-1].Created.Equal(sinceDate) {
-		//	myIndex = myIndex - 1
-		//}
 		if myIndex == -1 {
 			response := []byte("[]")
 			return 200, response
@@ -951,14 +934,41 @@ func getForumUsers(p *pgxpool.Pool, slug string, limit string, since string, des
 		return 404, response
 	}
 
-	var users Users
+	var usersAll Users
 	var rows pgx.Rows
-	rows, err = conn.Query(context.Background(), "SELECT users_nickname, users_about, users_email, users_fullname, user_id FROM public.thread WHERE forum_id = $1 UNION SELECT users_nickname, users_about, users_email, users_fullname, user_id FROM post WHERE lower(forum) = $2", forumId, strings.ToLower(slug))
+	//rows, err = conn.Query(context.Background(), "SELECT users_nickname, users_about, users_email, users_fullname, user_id FROM public.thread WHERE forum_id = $1 UNION SELECT users_nickname, users_about, users_email, users_fullname, user_id FROM post WHERE lower(forum) = $2", forumId, strings.ToLower(slug))
+	//
+	//for rows.Next() {
+	//	var user User
+	//	err = rows.Scan(&user.Nickname, &user.About, &user.Email, &user.Fullname, &user.Id)
+	//	users = append(users, user)
+	//}
+	//rows.Close()
 
+	rows, err = conn.Query(context.Background(), "SELECT users_nickname, users_about, users_email, users_fullname, user_id FROM public.thread WHERE forum_id = $1", forumId)
 	for rows.Next() {
 		var user User
 		err = rows.Scan(&user.Nickname, &user.About, &user.Email, &user.Fullname, &user.Id)
-		users = append(users, user)
+		usersAll  = append(usersAll, user)
+	}
+	rows.Close()
+
+	rows, err = conn.Query(context.Background(), "SELECT users_nickname, users_about, users_email, users_fullname, user_id FROM post WHERE lower(forum) = $1", strings.ToLower(slug))
+	for rows.Next() {
+		var user User
+		err = rows.Scan(&user.Nickname, &user.About, &user.Email, &user.Fullname, &user.Id)
+		usersAll = append(usersAll, user)
+	}
+	rows.Close()
+
+
+	var users Users
+	keys := make(map[string]bool)
+	for _, entry := range usersAll {
+		if _, value := keys[entry.Nickname]; !value {
+			keys[entry.Nickname] = true
+			users = append(users, entry)
+		}
 	}
 
 	if descBool {
@@ -1210,7 +1220,6 @@ func getPostThread(p *pgxpool.Pool, slug string, limit string, since string, des
 		posts = showFullTree(posts, descBool)
 	}
 
-	//var limitId uint64
 	if sortType == "parent_tree" {
 		posts = sortTreeParent(posts, parentId)
 		if descBool {
@@ -1222,11 +1231,6 @@ func getPostThread(p *pgxpool.Pool, slug string, limit string, since string, des
 				return posts[m].Id < posts[n].Id
 			})
 		}
-		//if !descBool {
-		//	if (limitInt != 0 && limitInt <= len(posts)) {
-		//		limitId = posts[limitInt].Id
-		//	}
-		//}
 		posts = showFullParentTree(posts)
 	}
 
@@ -1322,24 +1326,9 @@ func addVoteThread(p *pgxpool.Pool, slug string, vote Vote) (int, []byte) {
 
 	var threadSlug interface{}
 	var thread Thread
-	//if flag {
-	//	err = conn.QueryRow(context.Background(), "SELECT id, votes, title, users_nickname, forum, slug, message, created FROM public.thread WHERE lower(slug) = $1", strings.ToLower(slug)).Scan(&thread.Id, &thread.Votes, &thread.Title, &thread.Author, &thread.Forum, &threadSlug, &thread.Message, &thread.Created)
-	//} else {
-	//	err = conn.QueryRow(context.Background(), "SELECT id, votes, title, users_nickname, forum, slug, message, created FROM public.thread WHERE id = $1", selector).Scan(&thread.Id, &thread.Votes, &thread.Title, &thread.Author, &thread.Forum, &threadSlug, &thread.Message, &thread.Created)
-	//}
-	//if err != nil {
-	//	//log.Errorf("Unable to acquire a database connection: %v\n", err)
-	//	error := Error{"Can't find user with id #\n"}
-	//	response, _ = json.Marshal(error)
-	//	return 404, response
-	//}
-	//thread.Slug = fmt.Sprintf("%v", threadSlug)
 
 	var currentVote CurrentVote
-	//err = conn.QueryRow(context.Background(), "SELECT id, voice FROM public.vote WHERE thread_id = $1 AND lower(nickname) = $2", &thread.Id, strings.ToLower(vote.Nickname)).Scan(&currentVote.Id, &currentVote.Voice)
-
 	var rows pgx.Rows
-
 
 	if err != nil {
 		rows, err = conn.Query(context.Background(), "SELECT voice FROM public.vote WHERE lower(thread_slug) = $1 AND lower(nickname) = $2", strings.ToLower(slug), strings.ToLower(vote.Nickname))
@@ -1998,12 +1987,6 @@ func deleteService(p *pgxpool.Pool) (int, []byte) {
 	}
 	defer conn.Release()
 
-
-	//row, err = conn.Query(context.Background(),
-	//	"INSERT INTO public.vote (voice, nickname, thread_id) VALUES ($1, $2, $3) RETURNING id",
-	//	vote.Voice, vote.Nickname, thread.Id)
-	//row.Close()
-
 	var row pgx.Rows
 
 	row, err = conn.Query(context.Background(), "TRUNCATE public.vote CASCADE")
@@ -2050,7 +2033,7 @@ func main() {
 	router.POST("/api/forum/create", config.createForum)
 	router.GET("/api/forum/{slug}/details", config.getForumDetails)
 	router.POST("/api/forum/{slug}/create", config.createForumThread)
-	router.GET("/api/forum/{slug}/users", config.getForumUsers)
+	router.GET("/api/forum/{slug}/users", config.getForumUsers) //-
 	router.GET("/api/forum/{slug}/threads", config.getForumThreads)
 	router.GET("/api/post/{id}/details", config.getPostDetails)
 	router.POST("/api/post/{id}/details", config.updatePost)
@@ -2061,7 +2044,7 @@ func main() {
 	router.GET("/api/thread/{slug_or_id}/details", config.getThreadDetails)
 	router.POST("/api/thread/{slug_or_id}/details", config.updateThreadDetails)
 
-	router.GET("/api/thread/{slug_or_id}/posts", config.getPostThread)
+	router.GET("/api/thread/{slug_or_id}/posts", config.getPostThread) //-
 	router.POST("/api/thread/{slug_or_id}/vote", config.addVoteThread)
 	router.POST("/api/user/{nickname}/create", config.createUser)
 	router.GET("/api/user/{nickname}/profile", config.getUser)

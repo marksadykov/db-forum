@@ -25,6 +25,7 @@ CREATE UNLOGGED TABLE forum
     slug     varchar(80),
     threads  int,
     title    varchar(200),
+    nickname varchar(200),
     user_id int
 );
 
@@ -89,3 +90,4 @@ CREATE INDEX users_id_index ON users (id);
 CREATE INDEX thread_forum_id_index ON thread (forum_id);
 CREATE INDEX post_id_index ON post (id);
 CREATE INDEX forum_id_index ON forum (id);
+CREATE INDEX post_forum_index ON post (lower(forum));
