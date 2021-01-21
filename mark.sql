@@ -26,7 +26,6 @@ CREATE UNLOGGED TABLE forum
     threads  int,
     title    varchar(200),
     user_id int
---     user_id  int references users (id)
 );
 
 CREATE UNLOGGED TABLE thread
@@ -40,9 +39,7 @@ CREATE UNLOGGED TABLE thread
     slug       varchar(200),
     forum       varchar(200),
 
---     forum_id int references forum (id),
     forum_id int,
---     user_id  int references users (id),
     user_id  int,
 
     users_nickname     varchar(80),
@@ -60,9 +57,7 @@ CREATE UNLOGGED TABLE post
     message    varchar(5000),
     parent     int,
 
---     thread_id  int references thread (id),
     thread_id  int,
---     user_id    int references users (id),
     user_id    int,
 
     users_nickname     varchar(80),
@@ -80,26 +75,17 @@ CREATE UNLOGGED TABLE vote
     thread_slug varchar(80)
 );
 
+-- for input
 CREATE INDEX users_nickname_lower_index ON users (lower(nickname));
 CREATE INDEX users_email_index ON users (lower(email));
-
-CREATE INDEX forum_slug_lower_index ON forum (lower(forum.Slug));
--- CREATE INDEX users_id_index ON users (id);
-
+CREATE INDEX forum_slug_lower_index ON forum (lower(slug));
 CREATE INDEX thread_slug_lower_index ON thread (lower(slug));
--- CREATE INDEX forum_id_index ON forum (id);
-
 CREATE INDEX thread_id_index ON thread (id);
 CREATE INDEX vote_nickname ON vote (thread_id, lower(nickname));
--- CREATE INDEX vote_nickname ON vote (id);
+CREATE INDEX post_thread_id_index ON post (thread_id);
 
-CREATE INDEX post_id_index ON post (thread_id);
-
--- CREATE INDEX forum_slug_index ON forum (slug);
-
--- CREATE INDEX thread_slug_index ON thread (slug);
--- CREATE INDEX thread_slug_id_index ON thread (lower(slug), id);
--- CREATE INDEX thread_forum_lower_index ON thread (lower(forum));
--- CREATE INDEX thread_id_forum_index ON thread (id, forum);
-
--- CREATE INDEX vote_nickname ON vote (lower(nickname), thread_id, voice);
+-- for output
+CREATE INDEX users_id_index ON users (id);
+CREATE INDEX thread_forum_id_index ON thread (forum_id);
+CREATE INDEX post_id_index ON post (id);
+CREATE INDEX forum_id_index ON forum (id);
