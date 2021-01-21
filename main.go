@@ -416,12 +416,14 @@ func (h *RequestHandler) getForumThreads(ctx *fasthttp.RequestCtx) {
 
 // /post/{id}/details
 func (h *RequestHandler) getPostDetails(ctx *fasthttp.RequestCtx) {
-	log.Printf("/post/{id}/details")
+	//log.Printf("/post/{id}/details")
 
 	id := fmt.Sprintf("%v", ctx.UserValue("id"))
 
 	relatedParam := ctx.QueryArgs().Peek("related")
 	related := string(relatedParam)
+
+	log.Printf("/post/{id}/details", id, related)
 
 	status, response := getPostDetails(h.pool, id, related)
 	//log.Printf("status:", status)
@@ -555,7 +557,7 @@ func (h *RequestHandler) getPostThread(ctx *fasthttp.RequestCtx) {
 	desc := string(descParam)
 	sortP := string(sortParam)
 
-	log.Printf("/thread/{slug_or_id}/posts", limit, since, desc, sortP)
+	log.Printf("/thread/{slug_or_id}/posts", slug, limit, since, desc, sortP)
 
 	status, response := getPostThread(h.pool, slug, limit, since, desc, sortP)
 	//log.Printf("status:", status)
@@ -812,8 +814,6 @@ func getForumThreads(p *pgxpool.Pool, slug string, limit string, since string, d
 
 	if desc != "" {
 		descBool, _ = strconv.ParseBool(desc)
-	} else {
-		descBool = false
 	}
 
 	conn, err := p.Acquire(context.Background())
@@ -849,9 +849,15 @@ func getForumThreads(p *pgxpool.Pool, slug string, limit string, since string, d
 	//}
 	rows, err = conn.Query(context.Background(), "SELECT created, users_nickname, id, message, title, votes, forum, slug  FROM public.thread WHERE forum_id = $1", forumId)
 	for rows.Next() {
+		var threadSlug interface{}
 		var thread Thread
-		if err = rows.Scan(&thread.Created, &thread.Author, &thread.Id, &thread.Message, &thread.Title, &thread.Votes, &thread.Forum, &thread.Slug); err == nil {
+		if err = rows.Scan(&thread.Created, &thread.Author, &thread.Id, &thread.Message, &thread.Title, &thread.Votes, &thread.Forum, &threadSlug); err == nil {
 			//thread.Created = thread.Created.Add(-3 * time.Hour)
+			slugInterStr := fmt.Sprintf("%v", threadSlug)
+			if slugInterStr == "<nil>" {
+				slugInterStr = ""
+			}
+			thread.Slug = slugInterStr
 		}
 		threads = append(threads, thread)
 	}
@@ -870,11 +876,21 @@ func getForumThreads(p *pgxpool.Pool, slug string, limit string, since string, d
 	if since != "" {
 		myIndex := -1
 		for i := 0; i < len(threads); i++ {
-			if threads[i].Created.Equal(sinceDate) {
+			if !descBool && (threads[i].Created.Equal(sinceDate) || threads[i].Created.After(sinceDate))  {
 				myIndex = i
 				break
 			}
+			if descBool && (threads[i].Created.Equal(sinceDate) || threads[i].Created.Before(sinceDate))  {
+				myIndex = i
+				break
+			}
+			//if threads[i].Created.After(sinceDate) && myIndex == -1 {
+			//	myIndex = i
+			//}
 		}
+		//if myIndex > 1 && threads[myIndex-1].Created.Equal(sinceDate) {
+		//	myIndex = myIndex - 1
+		//}
 		if myIndex == -1 {
 			response := []byte("[]")
 			return 200, response
@@ -1160,7 +1176,6 @@ func getPostThread(p *pgxpool.Pool, slug string, limit string, since string, des
 	var parentId uint64
 	parentId = 100000000
 	var posts Posts
-	var i int
 	var rows pgx.Rows
 	rows, err = conn.Query(context.Background(), "SELECT created, users_nickname, id, message, forum, thread_id, parent FROM public.post WHERE thread_id = $1", threadId)
 
@@ -1173,7 +1188,6 @@ func getPostThread(p *pgxpool.Pool, slug string, limit string, since string, des
 			}
 		}
 		posts = append(posts, post)
-		i++
 	}
 
 	if sortType == "flat" {
@@ -1196,7 +1210,7 @@ func getPostThread(p *pgxpool.Pool, slug string, limit string, since string, des
 		posts = showFullTree(posts, descBool)
 	}
 
-	var limitId uint64
+	//var limitId uint64
 	if sortType == "parent_tree" {
 		posts = sortTreeParent(posts, parentId)
 		if descBool {
@@ -1208,11 +1222,11 @@ func getPostThread(p *pgxpool.Pool, slug string, limit string, since string, des
 				return posts[m].Id < posts[n].Id
 			})
 		}
-		if !descBool {
-			if (limitInt != 0 && limitInt <= len(posts)) {
-				limitId = posts[limitInt].Id
-			}
-		}
+		//if !descBool {
+		//	if (limitInt != 0 && limitInt <= len(posts)) {
+		//		limitId = posts[limitInt].Id
+		//	}
+		//}
 		posts = showFullParentTree(posts)
 	}
 
@@ -1234,7 +1248,7 @@ func getPostThread(p *pgxpool.Pool, slug string, limit string, since string, des
 
 	if (limitInt != 0 && limitInt <= len(posts)) {
 		if sortType == "parent_tree"{
-			if descBool {
+			//if descBool {
 				skip := 0
 				currentParentCount := 0
 				for i := 0; i < len(posts); i++ {
@@ -1249,16 +1263,19 @@ func getPostThread(p *pgxpool.Pool, slug string, limit string, since string, des
 				if currentParentCount > limitInt {
 					posts = posts[:skip]
 				}
-			} else {
-				var skip int
-				for i := 0; i < len(posts); i++ {
-					if posts[i].Id == limitId {
-						skip = i
-						break
-					}
-				}
-				posts = posts[:skip]
-			}
+			//} else {
+			//	skip := 0
+			//	currentParentCount := 0
+			//	for i := 0; i < len(posts); i++ {
+			//		if posts[i].Parent == parentId {
+			//			currentParentCount++
+			//		}
+			//		if currentParentCount > limitInt {
+			//			skip = i
+			//			break
+			//		}
+			//	}
+			//}
 		} else {
 			posts = posts[:limitInt]
 		}
@@ -1686,7 +1703,11 @@ func getPostDetails(p *pgxpool.Pool, id string, related string) (int, []byte) {
 			return 404, response
 		}
 		//thread.Created = thread.Created.Add(-3 * time.Hour)
-		thread.Slug = fmt.Sprintf("%v", slugInter)
+		slugInterStr := fmt.Sprintf("%v", slugInter)
+		if slugInterStr == "<nil>" {
+			slugInterStr = ""
+		}
+		thread.Slug = slugInterStr
 	}
 
 	var forum ForumDetails
