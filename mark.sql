@@ -94,7 +94,7 @@ CREATE INDEX thread_id_index ON thread (id);
 CREATE INDEX vote_nickname ON vote (thread_id, lower(nickname));
 CREATE INDEX post_thread_id_index ON post (thread_id);
 
--- for output
+-- for output index
 -- CREATE INDEX users_id_index ON users (id);
 CREATE INDEX thread_forum_id_index ON thread (forum_id);
 CREATE INDEX post_id_index ON post (id);
