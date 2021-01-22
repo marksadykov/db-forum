@@ -2029,7 +2029,7 @@ func deleteService(p *pgxpool.Pool) (int, []byte) {
 func main() {
 	//database
 	//const dsn = "user=mark host=localhost port=5432 dbname=mark pool_max_conns=30 slmode=disable"
-	const dsn = "user=root host=localhost port=5432 dbname=root pool_max_conns=30 slmode=disable"
+	// const dsn = "user=root host=localhost port=5432 dbname=root pool_max_conns=30 slmode=disable"
 	pool, err := pgxpool.Connect(context.Background(), os.Getenv(dsn))
 	if err != nil {
 		log.Fatalf("Unable to connection to database: %v\n", err)
@@ -2069,7 +2069,7 @@ func main() {
 	router.POST("/api/user/{nickname}/profile", config.updateUser)
 
 
-	server := fasthttp.Server{Handler: router.Handler}
+	//server := fasthttp.Server{Handler: router.Handler}
 	fmt.Printf("Server in %s", address)
 
 	err = server.ListenAndServe(address)
